@@ -146,6 +146,25 @@ char *cp_lexeme(Lexer *lexer, int start)
     return lexeme;
 }
 
+// Ignore the first and last quote in the lexeme if it is a char or string
+char *cp_inner_lexeme(Lexer *lexer, int start)
+{
+    int length = lexer->position - start - 1;
+
+    if (length < 0) length = 0;
+
+    char *lexeme = malloc((length + 1) * sizeof(char));
+    if (lexeme == NULL) return NULL;
+
+    for (int i = 0; i < length; i++)
+    {
+        lexeme[i] = lexer->source[start + 1 + i];
+    }
+    lexeme[length] = '\0';
+
+    return lexeme;
+}
+
 // Helper char cathegorization functions
 int issymb(char c)
 {
@@ -389,15 +408,22 @@ TokenType scan_word(Lexer *lexer)
                 }
                 return ID;
             }
+            else
+            {
+                return TOKEN_ERROR;
+            }
         }
     }
     else
     {
-        c = peek_char(lexer);
-        while (issep(c) == 0)
+        while (1)
         {
+            char c = peek_char(lexer);
+            if (issep(c))
+            {
+                break;
+            }
             advance_char(lexer);
-            c = peek_char(lexer);
         }
         return TOKEN_ERROR;
     }
@@ -538,12 +564,18 @@ TokenType scan_quotes(Lexer *lexer)
             }
         case '"':
             c = peek_char(lexer);
-            while (c != '"' && c != '\n')
+            while (peek_char(lexer) != '"' && peek_char(lexer) != '\n' && peek_char(lexer) != '\0')
             {
                 advance_char(lexer);
-                c = curr_char(lexer);
             }
-            return FMT_STRING;
+
+            if (peek_char(lexer) == '"')
+            {
+                advance_char(lexer); // Consome a aspa de fechamento
+                return FMT_STRING;
+            }
+            return TOKEN_ERROR;
+
         default:
             return TOKEN_ERROR;
     }
@@ -564,12 +596,57 @@ Token scan_token(Lexer *lexer)
     if (isquotes(c))
         type = scan_quotes(lexer);
 
+    char *lexeme;
+    if (type == CHAR_LITERAL || type == FMT_STRING)
+    {
+        lexeme = cp_inner_lexeme(lexer, start);
+    }
+    else
+    {
+        lexeme = cp_lexeme(lexer, start);
+    }
+
     Token token = {
-        .lexeme = cp_lexeme(lexer, start),
+        .lexeme = lexeme,
         .type = type,
         .line = lexer->line};
 
     return token;
+}
+
+typedef struct TokenList
+{
+    Token *items;
+    int capacity;
+    int count;
+} TokenList;
+
+TokenList create_token_list()
+{
+    TokenList list;
+    list.capacity = 10;
+    list.count = 0;
+    list.items = malloc(sizeof(Token) * list.capacity);
+    return list;
+}
+
+void add_token(TokenList *list, Token token)
+{
+    if (list->count >= list->capacity)
+    {
+        list->capacity *= 2;
+        list->items = realloc(list->items, sizeof(Token) * list->capacity);
+    }
+    list->items[list->count++] = token;
+}
+
+void free_token_list(TokenList *list)
+{
+    for (int i = 0; i < list->count; i++)
+    {
+        free(list->items[i].lexeme);
+    }
+    free(list->items);
 }
 
 int main(int argc, char *argv[])
@@ -592,9 +669,8 @@ int main(int argc, char *argv[])
         .position = 0,
         .line = 1};
 
-    Token tokens[20];
-    int i = 0;
-
+    TokenList token_list = create_token_list();
+    
     while (lexer.position < lexer.length)
     {
         char c = curr_char(&lexer);
@@ -607,13 +683,21 @@ int main(int argc, char *argv[])
         }
         else
         {
-            tokens[i] = scan_token(&lexer);
-            printf("%d: <%s>(%s)\n", tokens[i].line, token_type_name(tokens[i].type), tokens[i].lexeme);
-            free(tokens[i].lexeme);
-            i++;
+            Token token = scan_token(&lexer);
+            add_token(&token_list, token); 
             advance_char(&lexer);
         }
     }
 
+    for (int i = 0; i < token_list.count; i++)
+    {
+        printf("%d: <%s>(%s)\n", 
+               token_list.items[i].line, 
+               token_type_name(token_list.items[i].type), 
+               token_list.items[i].lexeme);
+    }
+
+    free_token_list(&token_list);
+    free(source_code);
     return 0;
 }
