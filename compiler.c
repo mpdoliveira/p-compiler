@@ -660,7 +660,8 @@ int main(int argc, char *argv[])
     char *source_code = read_file(argv[1]);
     if (source_code == NULL)
     {
-        return 0;
+        printf("Erro ao ler o arquivo %s\n", argv[1]);
+        return 1;
     }
 
     Lexer lexer = {
