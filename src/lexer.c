@@ -3,52 +3,15 @@
 #include <string.h>
 #include <ctype.h>
 
-typedef enum TokenType
-{
-    TOKEN_ERROR,
-    FUNCTION,
-    MAIN,
-    LET,
-    INT,
-    FLOAT,
-    CHAR,
-    IF,
-    ELSE,
-    WHILE,
-    PRINTLN,
-    RETURN,
-    LBRACKET,
-    RBRACKET,
-    LBRACE,
-    RBRACE,
-    ARROW,
-    COLON,
-    SEMICOLON,
-    COMMA,
-    ASSIGN,
-    EQ,
-    NE,
-    GT,
-    GE,
-    LT,
-    LE,
-    PLUS,
-    MINUS,
-    MULT,
-    DIV,
-    ID,
-    INT_CONST,
-    FLOAT_CONST,
-    CHAR_LITERAL,
-    FMT_STRING
-} TokenType;
+#include "token.h"
 
-typedef struct Token
+typedef struct Lexer
 {
-    char *lexeme;
-    TokenType type;
+    char *source;
+    int length;
+    int position;
     int line;
-} Token;
+} Lexer;
 
 typedef struct ReservedWord
 {
@@ -56,7 +19,7 @@ typedef struct ReservedWord
     TokenType type;
 } ReservedWord;
 
-ReservedWord RESERVED_WORDS[11] =
+static ReservedWord RESERVED_WORDS[11] =
     {
         {"fn", FUNCTION},
         {"if", IF},
@@ -70,50 +33,13 @@ ReservedWord RESERVED_WORDS[11] =
         {"return", RETURN},
         {"println", PRINTLN}};
 
-typedef struct Lexer
-{
-    char *source;
-    int length;
-    int position;
-    int line;
-} Lexer;
-
-// Helper file reading function
-char *read_file(char *path)
-{
-    FILE *file = fopen(path, "r");
-
-    if (file == NULL)
-    {
-        return NULL;
-    }
-
-    fseek(file, 0, SEEK_END);
-    unsigned long file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    
-    char *source_code = malloc(sizeof(char) * file_size);
-    if (source_code == NULL)
-    {
-        return NULL;
-    }
-
-    fread(source_code, 1, file_size + 1, file);
-
-    fclose(file);
-
-    source_code[file_size] = '\0';
-
-    return source_code;
-}
-
 // Helper char dealing functions
-char curr_char(Lexer *lexer)
+static char curr_char(Lexer *lexer)
 {
     return lexer->source[lexer->position];
 }
 
-char peek_char(Lexer *lexer)
+static char peek_char(Lexer *lexer)
 {
     if (lexer->position + 1 < lexer->length)
     {
@@ -122,12 +48,12 @@ char peek_char(Lexer *lexer)
     return '\0';
 }
 
-void advance_char(Lexer *lexer)
+static void advance_char(Lexer *lexer)
 {
     lexer->position++;
 }
 
-char *cp_lexeme(Lexer *lexer, int start)
+static char *cp_lexeme(Lexer *lexer, int start)
 {
     int length = lexer->position - start + 1;
     char *lexeme = malloc((length + 1) * sizeof(char));
@@ -147,14 +73,16 @@ char *cp_lexeme(Lexer *lexer, int start)
 }
 
 // Ignore the first and last quote in the lexeme if it is a char or string
-char *cp_inner_lexeme(Lexer *lexer, int start)
+static char *cp_inner_lexeme(Lexer *lexer, int start)
 {
     int length = lexer->position - start - 1;
 
-    if (length < 0) length = 0;
+    if (length < 0)
+        length = 0;
 
     char *lexeme = malloc((length + 1) * sizeof(char));
-    if (lexeme == NULL) return NULL;
+    if (lexeme == NULL)
+        return NULL;
 
     for (int i = 0; i < length; i++)
     {
@@ -166,7 +94,7 @@ char *cp_inner_lexeme(Lexer *lexer, int start)
 }
 
 // Helper char cathegorization functions
-int issymb(char c)
+static int issymb(char c)
 {
     if (c == '=' || c == '!' || c == '>' || c == '<' || c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' || c == '{' || c == '}' || c == ':' || c == ';' || c == ',')
     {
@@ -175,7 +103,7 @@ int issymb(char c)
     return 0;
 }
 
-int issep(char c)
+static int issep(char c)
 {
     if (issymb(c) || isspace(c) || c == '\0')
     {
@@ -184,7 +112,7 @@ int issep(char c)
     return 0;
 }
 
-int isquotes(char c)
+static int isquotes(char c)
 {
     if (c == '\'' || c == '"')
     {
@@ -193,126 +121,8 @@ int isquotes(char c)
     return 0;
 }
 
-// Helper printing functions
-const char *token_type_name(TokenType type)
-{
-    switch (type)
-    {
-    case TOKEN_ERROR:
-        return "TOKEN_ERROR";
-
-    case FUNCTION:
-        return "FUNCTION";
-
-    case MAIN:
-        return "MAIN";
-
-    case LET:
-        return "LET";
-
-    case INT:
-        return "INT";
-
-    case FLOAT:
-        return "FLOAT";
-
-    case CHAR:
-        return "CHAR";
-
-    case IF:
-        return "IF";
-
-    case ELSE:
-        return "ELSE";
-
-    case WHILE:
-        return "WHILE";
-
-    case PRINTLN:
-        return "PRINTLN";
-
-    case RETURN:
-        return "RETURN";
-
-    case LBRACKET:
-        return "LBRACKET";
-
-    case RBRACKET:
-        return "RBRACKET";
-
-    case LBRACE:
-        return "LBRACE";
-
-    case RBRACE:
-        return "RBRACE";
-
-    case ARROW:
-        return "ARROW";
-
-    case COLON:
-        return "COLON";
-
-    case SEMICOLON:
-        return "SEMICOLON";
-
-    case COMMA:
-        return "COMMA";
-
-    case ASSIGN:
-        return "ASSIGN";
-
-    case EQ:
-        return "EQ";
-
-    case NE:
-        return "NE";
-
-    case GT:
-        return "GT";
-
-    case GE:
-        return "GE";
-
-    case LT:
-        return "LT";
-
-    case LE:
-        return "LE";
-
-    case PLUS:
-        return "PLUS";
-
-    case MINUS:
-        return "MINUS";
-
-    case MULT:
-        return "MULT";
-
-    case DIV:
-        return "DIV";
-
-    case ID:
-        return "ID";
-
-    case INT_CONST:
-        return "INT_CONST";
-
-    case FLOAT_CONST:
-        return "FLOAT_CONST";
-
-    case CHAR_LITERAL:
-        return "CHAR_LITERAL";
-
-    case FMT_STRING:
-        return "FMT_STRING";
-
-    default:
-        return "UNKNOWN_TOKEN";
-    }
-}
-
 // Lexeme scanning functions
-TokenType scan_reserved(Lexer *lexer, int start)
+static TokenType scan_reserved(Lexer *lexer, int start)
 {
     int length = lexer->position - start + 1;
 
@@ -363,7 +173,7 @@ TokenType scan_reserved(Lexer *lexer, int start)
 }
 
 /*
-TokenType scan_reserved(Lexer *lexer, int start)
+static TokenType scan_reserved(Lexer *lexer, int start)
 {
     int length = lexer->position - start + 1;
     int n_reserved = sizeof(RESERVED_WORDS) / sizeof(RESERVED_WORDS[0]);
@@ -380,13 +190,13 @@ TokenType scan_reserved(Lexer *lexer, int start)
 }
 */
 
-TokenType scan_word(Lexer *lexer)
+static TokenType scan_word(Lexer *lexer)
 {
     int start = lexer->position;
     int possible_reserved = 1;
 
     char c = curr_char(lexer);
-    if(islower(c))
+    if (islower(c))
     {
         while (1)
         {
@@ -429,7 +239,7 @@ TokenType scan_word(Lexer *lexer)
     }
 }
 
-TokenType scan_number(Lexer *lexer)
+static TokenType scan_number(Lexer *lexer)
 {
     TokenType num_type = INT_CONST;
     while (1)
@@ -465,7 +275,7 @@ TokenType scan_number(Lexer *lexer)
     }
 }
 
-TokenType scan_symbol(Lexer *lexer)
+static TokenType scan_symbol(Lexer *lexer)
 {
     char c = curr_char(lexer);
     char next_c = peek_char(lexer);
@@ -546,42 +356,43 @@ TokenType scan_symbol(Lexer *lexer)
     }
 }
 
-TokenType scan_quotes(Lexer *lexer)
+static TokenType scan_quotes(Lexer *lexer)
 {
     char c = curr_char(lexer);
     switch (c)
     {
-        case '\'':
-            advance_char(lexer);
-            advance_char(lexer);
-            c = curr_char(lexer);
-            if (c == '\'')
-            {
-                return CHAR_LITERAL;
-            }
-            else{
-                return TOKEN_ERROR;
-            }
-        case '"':
-            c = peek_char(lexer);
-            while (peek_char(lexer) != '"' && peek_char(lexer) != '\n' && peek_char(lexer) != '\0')
-            {
-                advance_char(lexer);
-            }
-
-            if (peek_char(lexer) == '"')
-            {
-                advance_char(lexer); // Consome a aspa de fechamento
-                return FMT_STRING;
-            }
+    case '\'':
+        advance_char(lexer);
+        advance_char(lexer);
+        c = curr_char(lexer);
+        if (c == '\'')
+        {
+            return CHAR_LITERAL;
+        }
+        else
+        {
             return TOKEN_ERROR;
+        }
+    case '"':
+        c = peek_char(lexer);
+        while (peek_char(lexer) != '"' && peek_char(lexer) != '\n' && peek_char(lexer) != '\0')
+        {
+            advance_char(lexer);
+        }
 
-        default:
-            return TOKEN_ERROR;
+        if (peek_char(lexer) == '"')
+        {
+            advance_char(lexer); // Consome a aspa de fechamento
+            return FMT_STRING;
+        }
+        return TOKEN_ERROR;
+
+    default:
+        return TOKEN_ERROR;
     }
 }
 
-Token scan_token(Lexer *lexer)
+static Token scan_token(Lexer *lexer)
 {
     char c = curr_char(lexer);
     int start = lexer->position;
@@ -614,64 +425,14 @@ Token scan_token(Lexer *lexer)
     return token;
 }
 
-typedef struct TokenList
+int lexer_tokenize(const char *source_code, TokenList *token_list)
 {
-    Token *items;
-    int capacity;
-    int count;
-} TokenList;
-
-TokenList create_token_list()
-{
-    TokenList list;
-    list.capacity = 10;
-    list.count = 0;
-    list.items = malloc(sizeof(Token) * list.capacity);
-    return list;
-}
-
-void add_token(TokenList *list, Token token)
-{
-    if (list->count >= list->capacity)
-    {
-        list->capacity *= 2;
-        list->items = realloc(list->items, sizeof(Token) * list->capacity);
-    }
-    list->items[list->count++] = token;
-}
-
-void free_token_list(TokenList *list)
-{
-    for (int i = 0; i < list->count; i++)
-    {
-        free(list->items[i].lexeme);
-    }
-    free(list->items);
-}
-
-int main(int argc, char *argv[])
-{
-    if (argc != 2)
-    {
-        printf("Proper usage: compiler path.txt\n");
-        return 1;
-    }
-
-    char *source_code = read_file(argv[1]);
-    if (source_code == NULL)
-    {
-        printf("Erro ao ler o arquivo %s\n", argv[1]);
-        return 1;
-    }
-
     Lexer lexer = {
         .source = source_code,
         .length = strlen(source_code),
         .position = 0,
         .line = 1};
 
-    TokenList token_list = create_token_list();
-    
     while (lexer.position < lexer.length)
     {
         char c = curr_char(&lexer);
@@ -685,20 +446,12 @@ int main(int argc, char *argv[])
         else
         {
             Token token = scan_token(&lexer);
-            add_token(&token_list, token); 
+            add_token(token_list, token);
             advance_char(&lexer);
         }
     }
 
-    for (int i = 0; i < token_list.count; i++)
-    {
-        printf("%d: <%s>(%s)\n", 
-               token_list.items[i].line, 
-               token_type_name(token_list.items[i].type), 
-               token_list.items[i].lexeme);
-    }
-
-    free_token_list(&token_list);
     free(source_code);
+
     return 0;
 }
