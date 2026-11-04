@@ -1,0 +1,44 @@
+# Arquivos de compilação
+build/
+bin/
+obj/
+*.o
+*.a
+*.so
+*.out
+*.exe
+
+# Arquivos de dependência do Makefile
+*.d
+
+# Arquivos de depuração
+*.gch
+*.core
+core
+core.*
+
+# Relatórios de ferramentas de análise
+*.gcda
+*.gcno
+*.gcov
+vgcore.*
+
+# Arquivos gerados pelo compilador P
+output/
+outputs/
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Configurações locais de IDE
+.vscode/
+.idea/
+
+# Arquivos de log
+*.log
